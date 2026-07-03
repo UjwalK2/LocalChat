@@ -1,6 +1,9 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs').promises;
 const db = require('./db');
 const config = require('./config');
 
@@ -153,6 +156,92 @@ router.post('/auth/login', async (req, res) => {
 // GET CURRENT USER PROFILE
 router.get('/auth/me', authenticateToken, (req, res) => {
   return res.json({ user: req.user });
+});
+
+// Multer storage config for media uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, '../public/media'));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    cb(null, `${uniqueSuffix}-${sanitizedName}`);
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB file size limit
+});
+
+// POST /api/media/upload API
+router.post('/media/upload', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { to } = req.body;
+    if (!to) {
+      return res.status(400).json({ error: 'Recipient room or user (to) is required' });
+    }
+
+    const username = req.user.username;
+    const displayName = req.user.displayName;
+    
+    // 1. Prepare metadata
+    const fileMetadata = {
+      originalName: req.file.originalname,
+      filename: req.file.filename,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      uploadedBy: username,
+      senderName: displayName,
+      roomId: to,
+      uploadedAt: new Date().toISOString()
+    };
+
+    // 2. Save metadata JSON file alongside the uploaded file
+    const metaFilePath = path.join(__dirname, '../public/media', `${req.file.filename}.json`);
+    await fs.writeFile(metaFilePath, JSON.stringify(fileMetadata, null, 2), 'utf8');
+
+    // 3. Create the database message containing the file info
+    const messageData = {
+      from: username,
+      senderName: displayName,
+      to: to,
+      text: `Sent a file: ${req.file.originalname}`,
+      file: {
+        originalName: req.file.originalname,
+        filename: req.file.filename,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+        path: `/media/${req.file.filename}`
+      }
+    };
+
+    const savedMsg = await db.createMessage(messageData);
+
+    // 4. Broadcast the message to participants via Socket.io
+    const io = req.app.get('io');
+    if (io) {
+      if (to === 'global') {
+        io.to('global').emit('new_message', savedMsg);
+      } else {
+        io.to(`user_${username}`).to(`user_${to}`).emit('new_message', savedMsg);
+      }
+    }
+
+    return res.status(201).json({
+      message: 'File uploaded successfully',
+      chatMessage: savedMsg
+    });
+
+  } catch (error) {
+    console.error('File upload error:', error);
+    return res.status(500).json({ error: 'Internal server error during file upload' });
+  }
 });
 
 module.exports = {

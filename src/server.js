@@ -3,6 +3,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const config = require('./config');
 const db = require('./db');
 const { router: authRouter } = require('./routes');
@@ -12,6 +13,12 @@ async function startServer() {
   try {
     // 1. Initialize the local database file
     await db.init();
+
+    // Ensure public/media directory exists for file sharing
+    const mediaDir = path.join(__dirname, '../public/media');
+    if (!fs.existsSync(mediaDir)) {
+      fs.mkdirSync(mediaDir, { recursive: true });
+    }
 
     // 2. Set up Express application
     const app = express();
@@ -38,6 +45,9 @@ async function startServer() {
         methods: ['GET', 'POST']
       }
     });
+
+    // Set io instance on Express app to allow other files to access it
+    app.set('io', io);
 
     // Initialize real-time WebSocket event listeners
     initSocket(io);

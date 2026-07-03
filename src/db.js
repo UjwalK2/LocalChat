@@ -102,7 +102,8 @@ const db = {
       to: msg.to,             // username or 'global'
       text: msg.text,
       timestamp: new Date().toISOString(),
-      senderName: msg.senderName
+      senderName: msg.senderName,
+      file: msg.file || null
     };
     dbCache.messages.push(message);
     await save();
