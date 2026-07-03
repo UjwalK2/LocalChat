@@ -1,0 +1,26 @@
+{
+  "name": "local-chat",
+  "version": "1.0.0",
+  "description": "A highly portable, dark-themed, file-persisted local chatroom application.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
+  },
+  "keywords": [
+    "chat",
+    "local",
+    "termux",
+    "websocket",
+    "express"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.7.5"
+  }
+}
